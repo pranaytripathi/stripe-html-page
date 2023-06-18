@@ -1,1 +1,1 @@
-# stripe-html-page
+# stripe payment elements
