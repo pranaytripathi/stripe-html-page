@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
   // Load the publishable key from the server. The publishable key
   // is set in your .env file.
-  const {publishableKey} = await fetch('/config').then((r) => r.json());
+  const { publishableKey } = await fetch('/config').then((r) => r.json());
   if (!publishableKey) {
     addMessage(
       'No publishable key returned from the server. Please check `.env` and try again'
@@ -16,23 +16,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   // On page load, we create a PaymentIntent on the server so that we have its clientSecret to
   // initialize the instance of Elements below. The PaymentIntent settings configure which payment
   // method types to display in the PaymentElement.
-  const {
-    error: backendError,
-    clientSecret
-  } = await fetch('/create-payment-intent').then(r => r.json());
-  if (backendError) {
-    addMessage(backendError.message);
+  const createPayment = async (customerId) => {
+    const {
+      error: backendError,
+      clientSecret
+    } = await fetch(`/create-payment-intent?customerId=${customerId}`).then(r => r.json());
+    if (backendError) {
+      addMessage(backendError.message);
+    }
+    addMessage(`Client secret returned.`);
+    return clientSecret;
   }
-  addMessage(`Client secret returned.`);
 
-  // Initialize Stripe Elements with the PaymentIntent's clientSecret,
-  // then mount the payment element.
-  const elements = stripe.elements({ clientSecret });
-  const paymentElement = elements.create('payment');
-  paymentElement.mount('#payment-element');
-  // Create and mount the linkAuthentication Element to enable autofilling customer payment details
-  const linkAuthenticationElement = elements.create("linkAuthentication");
-  linkAuthenticationElement.mount("#link-authentication-element");
   // If the customer's email is known when the page is loaded, you can
   // pass the email to the linkAuthenticationElement on mount:
   //
@@ -55,7 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
 
     // Disable double submission of the form
-    if(submitted) { return; }
+    if (submitted) { return; }
     submitted = true;
     form.querySelector('button').disabled = true;
 
@@ -64,7 +59,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Confirm the payment given the clientSecret
     // from the payment intent that was just created on
     // the server.
-    const {error: stripeError} = await stripe.confirmPayment({
+    const { error: stripeError } = await stripe.confirmPayment({
       elements,
       confirmParams: {
         return_url: `${window.location.origin}/return.html`,
@@ -79,5 +74,41 @@ document.addEventListener('DOMContentLoaded', async () => {
       form.querySelector('button').disabled = false;
       return;
     }
+  });
+  const customerForm = document.getElementById('customer-info-form');
+  customerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = {
+      name: `${document.getElementById('customer-name').value} ${document.getElementById('last-name').value}`,
+      email: document.getElementById('customer-email').value,
+      phoneNumber: document.getElementById('phone').value,
+      address: {
+        street: document.getElementById('street').value,
+        zip: document.getElementById('zip').value,
+        state: document.getElementById('state').value,
+        country: document.getElementById('country').value
+      }
+    }
+
+    const { stripeCustomerId } = await fetch("/create-customer", { 
+      method: "POST",
+      headers: { 'Content-type': 'application/json' }, 
+      body: JSON.stringify(body) }).then((r) => r.json());
+
+    if (!stripeCustomerId) {
+      console.error('No customer Id')
+      return;
+    }
+    console.log(stripeCustomerId);
+    const clientSecret = await createPayment(stripeCustomerId);
+    const elements = stripe.elements({ clientSecret });
+    const paymentElement = elements.create('payment');
+    paymentElement.mount('#payment-element');
+    // Create and mount the linkAuthentication Element to enable autofilling customer payment details
+    const linkAuthenticationElement = elements.create("linkAuthentication");
+    linkAuthenticationElement.mount("#link-authentication-element");
+
+    customerForm.style.visibility = 'hidden';
+    customerForm.style.height = '0px';
   });
 });

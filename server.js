@@ -1,5 +1,6 @@
 const express = require('express');
 const app = express();
+
 const {resolve} = require('path');
 // Replace if using a different env file or config
 const env = require('dotenv').config({path: './.env'});
@@ -14,6 +15,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, {
 });
 
 app.use(express.static(process.env.STATIC_DIR));
+
 app.use(
   express.json({
     // We need the raw body to verify webhook signatures.
@@ -25,6 +27,10 @@ app.use(
     },
   })
 );
+
+app.use(express.json())
+
+
 
 app.get('/', (req, res) => {
   const path = resolve(process.env.STATIC_DIR + '/index.html');
@@ -44,9 +50,11 @@ app.get('/create-payment-intent', async (req, res) => {
   //
   // [0] https://stripe.com/docs/api/payment_intents/create
   try {
+    console.log(req.query);
     const paymentIntent = await stripe.paymentIntents.create({
       currency: 'EUR',
       amount: 1999,
+      ...(req.query.customerId && { customer: req.query.customerId }),
       payment_method_types: ["card"],
       /**
        * Below options will only work in live mode and not in test mode.
@@ -79,6 +87,27 @@ app.get("/customers", async (req, res) => {
     });
     return res.json(list.data[0]);
 });
+
+
+app.post("/create-customer", async (req, res) => {
+  const { name, address, email, phone } = req.body;
+  const customer = await stripe.customers.create({
+    description: `Creating customer ${req.body.name}`,
+    name,
+    email,
+    phone,
+    address: {
+      line1: address.street,
+      state: address.state,
+      country: 'US',
+      postal_code: address.zip,
+    }
+  });
+  return res.json({ stripeCustomerId: customer.id })
+});
+
+
+
 
 // Expose a endpoint as a webhook handler for asynchronous events.
 // Configure your webhook in the stripe developer dashboard
