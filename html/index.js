@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     );
     alert('Please set your Stripe publishable API key in the .env file');
   }
+  let elements;
 
   const stripe = Stripe(publishableKey, {
     apiVersion: '2020-08-27',
@@ -101,12 +102,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     console.log(stripeCustomerId);
     const clientSecret = await createPayment(stripeCustomerId);
-    const elements = stripe.elements({ clientSecret });
+    elements = stripe.elements({ clientSecret });
     const paymentElement = elements.create('payment');
     paymentElement.mount('#payment-element');
     // Create and mount the linkAuthentication Element to enable autofilling customer payment details
-    const linkAuthenticationElement = elements.create("linkAuthentication");
-    linkAuthenticationElement.mount("#link-authentication-element");
+    // const linkAuthenticationElement = elements.create("linkAuthentication");
+    // linkAuthenticationElement.mount("#link-authentication-element");
 
     customerForm.style.visibility = 'hidden';
     customerForm.style.height = '0px';
