@@ -5,11 +5,13 @@ const {resolve} = require('path');
 // Replace if using a different env file or config
 const env = require('dotenv').config({path: './.env'});
 
+const stripeApiVersion = "2020-08-27;invoice_payment_plans_beta=v1"
+
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2020-08-27',
+  apiVersion: stripeApiVersion,
   appInfo: { // For sample support and debugging, not required for production:
     name: "stripe-samples/accept-a-payment/payment-element",
-    version: "0.0.2",
+    version: stripeApiVersion,
     url: "https://github.com/stripe-samples"
   }
 });
@@ -102,8 +104,74 @@ app.post("/create-customer", async (req, res) => {
       country: 'US',
       postal_code: address.zip,
     }
+  }, {
+    apiVersion: stripeApiVersion
   });
   return res.json({ stripeCustomerId: customer.id })
+});
+
+
+app.post("/create-product", async(req, res) => {
+  const { name, amount } = req.body;
+  const product = await stripe.products.create({
+    name,
+  });
+  const price = await stripe.prices.create({
+    product: product.id,
+    unit_amount: amount * 100,
+    currency: 'usd',
+    currency_options: {
+      'eur': {
+        unit_amount: amount * 100
+      }
+    }
+  }, {
+    apiVersion: stripeApiVersion
+  });
+  return res.json({ id: price.id });
+});
+
+app.post("/invoice/quarterly", async(req, res) => {
+    const { priceId, currency, customerId } = req.body;
+    const price = await stripe.prices.retrieve(priceId, { expand: ["currency_options"]});
+    const amount = price.currency_options[currency].unit_amount;
+    const invoiceAmount = Math.ceil(amount/3);
+
+
+
+    const invoiceCreate = await stripe.invoices.create({
+      collection_method: "send_invoice",
+      customer: customerId,
+      pending_invoice_items_behavior: "exclude",
+      auto_advance: true,
+      amounts_due: [{
+        amount: invoiceAmount,
+        description: "Initial Payment",
+        days_until_due: 1
+      }, {
+        amount: invoiceAmount,
+        description: "Installment one",
+        days_until_due: 30
+      }, {
+        amount: invoiceAmount,
+        description: "Installment two",
+        days_until_due: 60
+      }]
+    }, {
+      apiVersion: stripeApiVersion
+    });
+
+    
+    const invoiceItem = await stripe.invoiceItems.create({
+        customer: customerId,
+        price: priceId,
+        invoice: invoiceCreate.id,
+        currency,
+    }, {
+      apiVersion: stripeApiVersion
+    });
+
+    return res.json({ invoiceID: invoiceCreate.id });
 });
 
 
@@ -149,6 +217,7 @@ app.post('/webhook', async (req, res) => {
   }
   res.sendStatus(200);
 });
+
 
 app.listen(4242, () =>
   console.log(`Node server listening at http://localhost:4242`)
