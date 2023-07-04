@@ -215,6 +215,23 @@ app.post('/webhook', async (req, res) => {
   } else if (eventType === 'payment_intent.payment_failed') {
     console.log('❌ Payment failed.');
   }
+
+  if (eventType === 'invoice_paid') {
+    // Funds have been captured
+    // Fulfill any orders, e-mail receipts, etc
+    // To cancel the payment after capture you will need to issue a Refund (https://stripe.com/docs/api/refunds)
+    console.log('💰 Invoice captured!'+ data.object.id); // this id is invoice id
+  } else if (eventType === 'invoice.payment_failed') {
+    // Sent when a customer attempted a payment on an invoice, but the payment failed.
+    
+    console.log('❌ invoice failed.' + data.object.id); // this id is invoice id
+  } else if (eventType === 'payment_intent.processing') { 
+    /*
+    Sent when a customer successfully initiated a payment, but the payment has yet to complete. 
+    This event is most commonly sent when a bank debit is initiated. 
+    It’s followed by either a invoice.paid or invoice.payment_failed event in the future
+    */
+  }
   res.sendStatus(200);
 });
 
