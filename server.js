@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-
+const { getUnixTime } = require('date-fns');
 const {resolve} = require('path');
 // Replace if using a different env file or config
 const env = require('dotenv').config({path: './.env'});
@@ -39,9 +39,25 @@ app.get('/', (req, res) => {
   res.sendFile(path);
 });
 
+app.get('/subscribe', (req, res) => {
+  const path = resolve(process.env.STATIC_DIR + '/subscriptions/index.html');
+  res.sendFile(path);
+});
+
 app.get('/config', (req, res) => {
   res.send({
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+  });
+});
+
+app.get('/subscriptions-config', async (req, res) => {
+  const prices = await stripe.prices.list({
+    expand: ['data.product']
+  });
+ console.log(prices);
+  res.send({
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+    prices: prices.data,
   });
 });
 
@@ -110,9 +126,23 @@ app.post("/create-customer", async (req, res) => {
   return res.json({ stripeCustomerId: customer.id })
 });
 
+app.post('/subscriptions/create-customer', async (req, res) => {
+  // Create a new customer object
+
+  const customer = await stripe.customers.create({
+    email: req.body.email,
+  });
+
+  // Save the customer.id in your database alongside your user.
+  // We're simulating authentication with a cookie.
+  res.cookie('customer', customer.id, { maxAge: 900000, httpOnly: true });
+
+  res.send({ customer: customer });
+});
+
 
 app.post("/create-product", async(req, res) => {
-  const { name, amount } = req.body;
+  const { name, amount, recurring } = req.body;
   const product = await stripe.products.create({
     name,
   });
@@ -124,7 +154,8 @@ app.post("/create-product", async(req, res) => {
       'eur': {
         unit_amount: amount * 100
       }
-    }
+    },
+    ...(recurring && { recurring: { interval:  'month', interval_count: 1 }})
   }, {
     apiVersion: stripeApiVersion
   });
@@ -136,9 +167,6 @@ app.post("/invoice/quarterly", async(req, res) => {
     const price = await stripe.prices.retrieve(priceId, { expand: ["currency_options"]});
     const amount = price.currency_options[currency].unit_amount;
     const invoiceAmount = Math.ceil(amount/3);
-
-
-
     const invoiceCreate = await stripe.invoices.create({
       collection_method: "send_invoice",
       customer: customerId,
@@ -173,6 +201,106 @@ app.post("/invoice/quarterly", async(req, res) => {
 
     return res.json({ invoiceID: invoiceCreate.id });
 });
+
+app.post('/subscriptions/create-subscription', async (req, res) => {
+  // Simulate authenticated user. In practice this will be the
+  // Stripe Customer ID related to the authenticated user.
+  const customerId = req.body.customerId;
+
+  // Create the subscription
+  const priceId = req.body.priceId;
+  let currentDate = new Date();
+  const cancelDate = new Date(currentDate.setMonth(currentDate.getMonth() + 3)) 
+  // 3 here is number of installments which is after 3 months we cancel the subscription. This will 6 for 6 months
+
+  try {
+
+    const subscription = await stripe.subscriptions.create({
+      customer: 'cus_OCVNPKB9WU9JRj',
+      items: [{
+        price: priceId,
+      }],
+      payment_behavior: 'default_incomplete',
+      expand: ['latest_invoice.payment_intent'],
+      cancel_at: getUnixTime(cancelDate)
+    });
+
+    res.send({
+      subscriptionId: subscription.id,
+      clientSecret: subscription.latest_invoice.payment_intent.client_secret,
+    });
+  } catch (error) {
+    return res.status(400).send({ error: { message: error.message } });
+  }
+});
+
+app.get('/subscriptions/invoice-preview', async (req, res) => {
+  const customerId = req.cookies['customer'];
+  const priceId = process.env[req.query.newPriceLookupKey.toUpperCase()];
+
+  const subscription = await stripe.subscriptions.retrieve(
+    req.query.subscriptionId
+  );
+
+  const invoice = await stripe.invoices.retrieveUpcoming({
+    customer: customerId,
+    subscription: req.query.subscriptionId,
+    subscription_items: [ {
+      id: subscription.items.data[0].id,
+      price: priceId,
+    }],
+  });
+
+  res.send({ invoice });
+});
+
+app.post('/subscriptions/cancel-subscription', async (req, res) => {
+  // Cancel the subscription
+  try {
+    const deletedSubscription = await stripe.subscriptions.del(
+      req.body.subscriptionId
+    );
+
+    res.send({ subscription: deletedSubscription });
+  } catch (error) {
+    return res.status(400).send({ error: { message: error.message } });
+  }
+});
+
+app.post('subscriptions//update-subscription', async (req, res) => {
+  try {
+    const subscription = await stripe.subscriptions.retrieve(
+      req.body.subscriptionId
+    );
+    const updatedSubscription = await stripe.subscriptions.update(
+      req.body.subscriptionId, {
+        items: [{
+          id: subscription.items.data[0].id,
+          price: process.env[req.body.newPriceLookupKey.toUpperCase()],
+        }],
+      }
+    );
+
+    res.send({ subscription: updatedSubscription });
+  } catch (error) {
+    return res.status(400).send({ error: { message: error.message } });
+  }
+});
+
+app.get('/subscriptions/list', async (req, res) => {
+  // Simulate authenticated user. In practice this will be the
+  // Stripe Customer ID related to the authenticated user.
+  const customerId = req.cookies['customer'];
+
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: 'all',
+    expand: ['data.default_payment_method'],
+  });
+
+  res.json({subscriptions});
+});
+
 
 
 
