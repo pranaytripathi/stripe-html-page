@@ -1,9 +1,9 @@
 const express = require('express');
 const app = express();
 const { getUnixTime } = require('date-fns');
-const {resolve} = require('path');
+const { resolve } = require('path');
 // Replace if using a different env file or config
-const env = require('dotenv').config({path: './.env'});
+const env = require('dotenv').config({ path: './.env' });
 
 const stripeApiVersion = "2020-08-27;invoice_payment_plans_beta=v1"
 
@@ -54,7 +54,7 @@ app.get('/subscriptions-config', async (req, res) => {
   const prices = await stripe.prices.list({
     expand: ['data.product']
   });
- console.log(prices);
+  console.log(prices);
   res.send({
     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
     prices: prices.data,
@@ -78,7 +78,7 @@ app.get('/create-payment-intent', async (req, res) => {
        * Below options will only work in live mode and not in test mode.
        * payment_method_types: ["card", "apple_pay", "google_pay"],
        */
-      
+
       /**
        * Enables card to be used for future usage.
        */
@@ -99,11 +99,11 @@ app.get('/create-payment-intent', async (req, res) => {
 });
 
 app.get("/customers", async (req, res) => {
-    const email = req.query.email;
-    const list = await stripe.customers.list({
-      limit: 100,
-    });
-    return res.json(list.data[0]);
+  const email = req.query.email;
+  const list = await stripe.customers.list({
+    limit: 100,
+  });
+  return res.json(list.data[0]);
 });
 
 
@@ -141,7 +141,7 @@ app.post('/subscriptions/create-customer', async (req, res) => {
 });
 
 
-app.post("/create-product", async(req, res) => {
+app.post("/create-product", async (req, res) => {
   const { name, amount, recurring } = req.body;
   const product = await stripe.products.create({
     name,
@@ -155,51 +155,51 @@ app.post("/create-product", async(req, res) => {
         unit_amount: amount * 100
       }
     },
-    ...(recurring && { recurring: { interval:  'month', interval_count: 1 }})
+    ...(recurring && { recurring: { interval: 'month', interval_count: 1 } })
   }, {
     apiVersion: stripeApiVersion
   });
   return res.json({ id: price.id });
 });
 
-app.post("/invoice/quarterly", async(req, res) => {
-    const { priceId, currency, customerId } = req.body;
-    const price = await stripe.prices.retrieve(priceId, { expand: ["currency_options"]});
-    const amount = price.currency_options[currency].unit_amount;
-    const invoiceAmount = Math.ceil(amount/3);
-    const invoiceCreate = await stripe.invoices.create({
-      collection_method: "send_invoice",
-      customer: customerId,
-      pending_invoice_items_behavior: "exclude",
-      auto_advance: true,
-      amounts_due: [{
-        amount: invoiceAmount,
-        description: "Initial Payment",
-        days_until_due: 1
-      }, {
-        amount: invoiceAmount,
-        description: "Installment one",
-        days_until_due: 30
-      }, {
-        amount: invoiceAmount,
-        description: "Installment two",
-        days_until_due: 60
-      }]
+app.post("/invoice/quarterly", async (req, res) => {
+  const { priceId, currency, customerId } = req.body;
+  const price = await stripe.prices.retrieve(priceId, { expand: ["currency_options"] });
+  const amount = price.currency_options[currency].unit_amount;
+  const invoiceAmount = Math.ceil(amount / 3);
+  const invoiceCreate = await stripe.invoices.create({
+    collection_method: "send_invoice",
+    customer: customerId,
+    pending_invoice_items_behavior: "exclude",
+    auto_advance: true,
+    amounts_due: [{
+      amount: invoiceAmount,
+      description: "Initial Payment",
+      days_until_due: 1
     }, {
-      apiVersion: stripeApiVersion
-    });
-
-    
-    const invoiceItem = await stripe.invoiceItems.create({
-        customer: customerId,
-        price: priceId,
-        invoice: invoiceCreate.id,
-        currency,
+      amount: invoiceAmount,
+      description: "Installment one",
+      days_until_due: 30
     }, {
-      apiVersion: stripeApiVersion
-    });
+      amount: invoiceAmount,
+      description: "Installment two",
+      days_until_due: 60
+    }]
+  }, {
+    apiVersion: stripeApiVersion
+  });
 
-    return res.json({ invoiceID: invoiceCreate.id });
+
+  const invoiceItem = await stripe.invoiceItems.create({
+    customer: customerId,
+    price: priceId,
+    invoice: invoiceCreate.id,
+    currency,
+  }, {
+    apiVersion: stripeApiVersion
+  });
+
+  return res.json({ invoiceID: invoiceCreate.id });
 });
 
 app.post('/subscriptions/create-subscription', async (req, res) => {
@@ -210,7 +210,7 @@ app.post('/subscriptions/create-subscription', async (req, res) => {
   // Create the subscription
   const priceId = req.body.priceId;
   let currentDate = new Date();
-  const cancelDate = new Date(currentDate.setMonth(currentDate.getMonth() + 3)) 
+  const cancelDate = new Date(currentDate.setMonth(currentDate.getMonth() + 3))
   // 3 here is number of installments which is after 3 months we cancel the subscription. This will 6 for 6 months
 
   try {
@@ -245,7 +245,7 @@ app.get('/subscriptions/invoice-preview', async (req, res) => {
   const invoice = await stripe.invoices.retrieveUpcoming({
     customer: customerId,
     subscription: req.query.subscriptionId,
-    subscription_items: [ {
+    subscription_items: [{
       id: subscription.items.data[0].id,
       price: priceId,
     }],
@@ -274,11 +274,11 @@ app.post('subscriptions//update-subscription', async (req, res) => {
     );
     const updatedSubscription = await stripe.subscriptions.update(
       req.body.subscriptionId, {
-        items: [{
-          id: subscription.items.data[0].id,
-          price: process.env[req.body.newPriceLookupKey.toUpperCase()],
-        }],
-      }
+      items: [{
+        id: subscription.items.data[0].id,
+        price: process.env[req.body.newPriceLookupKey.toUpperCase()],
+      }],
+    }
     );
 
     res.send({ subscription: updatedSubscription });
@@ -298,7 +298,7 @@ app.get('/subscriptions/list', async (req, res) => {
     expand: ['data.default_payment_method'],
   });
 
-  res.json({subscriptions});
+  res.json({ subscriptions });
 });
 
 
@@ -348,18 +348,68 @@ app.post('/webhook', async (req, res) => {
     // Funds have been captured
     // Fulfill any orders, e-mail receipts, etc
     // To cancel the payment after capture you will need to issue a Refund (https://stripe.com/docs/api/refunds)
-    console.log('💰 Invoice captured!'+ data.object.id); // this id is invoice id
+    console.log('💰 Invoice captured!' + data.object.id); // this id is invoice id
   } else if (eventType === 'invoice.payment_failed') {
     // Sent when a customer attempted a payment on an invoice, but the payment failed.
-    
+
     console.log('❌ invoice failed.' + data.object.id); // this id is invoice id
-  } else if (eventType === 'payment_intent.processing') { 
+  } else if (eventType === 'payment_intent.processing') {
     /*
     Sent when a customer successfully initiated a payment, but the payment has yet to complete. 
     This event is most commonly sent when a bank debit is initiated. 
     It’s followed by either a invoice.paid or invoice.payment_failed event in the future
     */
   }
+  switch (eventType) {
+
+    case 'invoice.payment_succeeded':
+      if (dataObject['billing_reason'] == 'subscription_create') {
+        // The subscription automatically activates after successful payment
+        // Set the payment method used to pay the first invoice
+        // as the default payment method for that subscription
+        const subscription_id = dataObject['subscription']
+        const payment_intent_id = dataObject['payment_intent']
+
+        // Retrieve the payment intent used to pay the subscription
+        const payment_intent = await stripe.paymentIntents.retrieve(payment_intent_id);
+
+        try {
+          const subscription = await stripe.subscriptions.update(
+            subscription_id,
+            {
+              default_payment_method: payment_intent.payment_method,
+            },
+          );
+
+          console.log("Default payment method set for subscription:" + payment_intent.payment_method);
+        } catch (err) {
+          console.log(err);
+          console.log(`⚠️  Falied to update the default payment method for subscription: ${subscription_id}`);
+        }
+      };
+
+      break;
+    case 'invoice.payment_failed':
+      // If the payment fails or the customer does not have a valid payment method,
+      //  an invoice.payment_failed event is sent, the subscription becomes past_due.
+      // Use this webhook to notify your user that their payment has
+      // failed and to retrieve new card details.
+      break;
+    case 'invoice.finalized':
+      // If you want to manually send out invoices to your customers
+      // or store them locally to reference to avoid hitting Stripe rate limits.
+      break;
+    case 'customer.subscription.deleted':
+      if (event.request != null) {
+        // handle a subscription cancelled by your request
+        // from above.
+      } else {
+        // handle subscription cancelled automatically based
+        // upon your subscription settings.
+      }
+      break;
+    /*  */
+}
   res.sendStatus(200);
 });
 
