@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     alert('Please set your Stripe publishable API key in the .env file');
   }
   let elements;
+  const paymentOptionsButtons =  document.getElementById('paymentOptions');
+
+  paymentOptionsButtons.style.visibility = 'hidden';
 
   const stripe = Stripe(publishableKey, {
     apiVersion: '2020-08-27',
@@ -101,15 +104,33 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     console.log(stripeCustomerId);
-    const clientSecret = await createPayment(stripeCustomerId);
-    elements = stripe.elements({ clientSecret });
-    const paymentElement = elements.create('payment');
-    paymentElement.mount('#payment-element');
+
+    localStorage.setItem('stripeCustomerId', stripeCustomerId);
+    
     // Create and mount the linkAuthentication Element to enable autofilling customer payment details
     // const linkAuthenticationElement = elements.create("linkAuthentication");
     // linkAuthenticationElement.mount("#link-authentication-element");
 
     customerForm.style.visibility = 'hidden';
     customerForm.style.height = '0px';
+    paymentOptionsButtons.style.visibility = 'visible';
+  });
+
+  const payInFullButton = document.getElementById("payFull");
+  payInFullButton.addEventListener('click', async (e) => {
+    e.preventDefault();
+    let customerId = localStorage.getItem('stripeCustomerId');
+    console.log(customerId)
+    const clientSecret = await createPayment(customerId);
+    elements = stripe.elements({ clientSecret });
+    const paymentElement = elements.create('payment');
+    paymentElement.mount('#payment-element');
+    paymentOptionsButtons.style.visibility = 'hidden';
+  });
+
+  const payInstallmentsButton = document.getElementById("payInstallments");
+  payInstallmentsButton.addEventListener('click', (e) => {
+    e.preventDefault();
+    window.location.href = '/subscriptions/prices.html'
   });
 });

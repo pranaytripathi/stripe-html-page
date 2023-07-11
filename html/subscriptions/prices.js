@@ -45,6 +45,7 @@ const createSubscription = (priceId) => {
     },
     body: JSON.stringify({
       priceId: priceId,
+      customerId: localStorage.getItem('stripeCustomerId')
     }),
   })
     .then((response) => response.json())
