@@ -5,15 +5,15 @@ const setMessage = (message) => {
 }
 
 // Fetch public key and initialize Stripe.
-let stripe, cardElement;
+let stripe, cardElement, elements;
 
 fetch('/config')
   .then((resp) => resp.json())
   .then((resp) => {
     stripe = Stripe(resp.publishableKey);
 
-    const elements = stripe.elements();
-    cardElement = elements.create('card');
+    elements = stripe.elements({clientSecret: window.sessionStorage.getItem('clientSecret')});
+    cardElement = elements.create('payment');
     cardElement.mount('#card-element');
   });
 
@@ -41,20 +41,26 @@ form.addEventListener('submit', async (e) => {
   const nameInput = document.getElementById('name');
 
   // Create payment method and confirm payment intent.
-  stripe.confirmCardPayment(clientSecret, {
-    payment_method: {
-      card: cardElement,
-      billing_details: {
-        name: nameInput.value,
-      },
-    }
-  }).then((result) => {
-    if(result.error) {
-      setMessage(`Payment failed: ${result.error.message}`);
-    } else {
-      // Redirect the customer to their account page
-      setMessage('Success! Redirecting to your account.');
-      window.location.href = '/subscriptions/account.html';
+  // stripe.confirmCardPayment(clientSecret, {
+  //   payment_method: {
+  //     card: cardElement,
+  //     billing_details: {
+  //       name: nameInput.value,
+  //     },
+  //   }
+  // }).then((result) => {
+  //   if(result.error) {
+  //     setMessage(`Payment failed: ${result.error.message}`);
+  //   } else {
+  //     // Redirect the customer to their account page
+  //     setMessage('Success! Redirecting to your account.');
+  //     window.location.href = '/subscriptions/account.html';
+  //   }
+  // });
+  const { error: stripeError } = await stripe.confirmPayment({
+    elements,
+    confirmParams: {
+      return_url: `${window.location.origin}/subscriptions/account.html`,
     }
   });
 });
